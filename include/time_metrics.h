@@ -136,6 +136,7 @@ public:
         consumer.consumeResult(name + "-stddev", "N/A");
         consumer.consumeResult(name + "-median", "N/A");
         consumer.consumeResult(name + "-min", "N/A");
+        consumer.consumeResult(name + "-max", "N/A");
         consumer.consumeResult(name + "-samples", "N/A");
         consumer.consumeResult(name + "-throughput", "N/A");
       }
