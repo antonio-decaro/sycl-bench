@@ -100,6 +100,7 @@ public:
         consumer.consumeResult(name + "-stddev", std::to_string(stddev), "s");
         consumer.consumeResult(name + "-median", std::to_string(median), "s");
         consumer.consumeResult(name + "-min", std::to_string(resultsSeconds[0]), "s");
+        consumer.consumeResult(name + "-max", std::to_string(resultsSeconds[resultsSeconds.size() - 1]), "s");
 
         // Emit individual samples as well
         std::stringstream samples;
