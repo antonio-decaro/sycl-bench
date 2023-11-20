@@ -22,16 +22,22 @@ if(CMAKE_GENERATOR STREQUAL "Ninja")
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${CMAKE_SOURCE_DIR}/include-bloom-filter)
+
 include_directories(${CMAKE_SOURCE_DIR}/polybench/common)
 
-# SYCL Bench variables
-set(SYCL_BENCH_ENABLE_FP64_BENCHMARKS "ON" CACHE STRING "Enable FP64 benchmarks [ON]")
+set(SYCL_IMPL "" CACHE STRING "Select SYCL implementation")
+set_property(CACHE SYCL_IMPL PROPERTY STRINGS "dpcpp" "AdaptiveCpp" "triSYCL")
+option(ENABLED_TIME_EVENT_PROFILING "Enable time profiling with sycl event" OFF)
 
 set(supported_implementations
   AdaptiveCpp
   dpcpp
   triSYCL
-)
+)# SYCL Bench variables
+option(SYCL_BENCH_ENABLE_FP64_BENCHMARKS "Enable FP64 benchmarks" ON)
+
+
 
 list(FIND supported_implementations ${SYCL_IMPL} impl_idx)
 
@@ -76,47 +82,16 @@ elseif(SYCL_IMPL STREQUAL "triSYCL")
 endif()
 
 set(benchmarks
-  micro/arith.cpp
-  micro/DRAM.cpp
-  micro/host_device_bandwidth.cpp
-  micro/pattern_L2.cpp
-  micro/sf.cpp
-  micro/local_mem.cpp
-  single-kernel/median.cpp
-  single-kernel/scalar_prod.cpp
-  single-kernel/sobel.cpp
-  single-kernel/sobel5.cpp
-  single-kernel/sobel7.cpp
-  single-kernel/vec_add.cpp
-  single-kernel/lin_reg_error.cpp
-  single-kernel/lin_reg_coeff.cpp
-  single-kernel/kmeans.cpp
-  single-kernel/mol_dyn.cpp
-  single-kernel/nbody.cpp
-  pattern/segmentedreduction.cpp
-  pattern/reduction.cpp
-  runtime/dag_task_throughput_sequential.cpp
-  runtime/dag_task_throughput_independent.cpp
-  runtime/blocked_transform.cpp
-  runtime/matmulchain.cpp
-  polybench/2DConvolution.cpp
-  polybench/2mm.cpp
-  polybench/3DConvolution.cpp
-  polybench/3mm.cpp
-  polybench/atax.cpp
-  polybench/bicg.cpp
-  polybench/correlation.cpp
-  polybench/covariance.cpp
-  polybench/fdtd2d.cpp
-  polybench/gemm.cpp
-  polybench/gesummv.cpp
-  polybench/gramschmidt.cpp
-  polybench/mvt.cpp
-  polybench/syr2k.cpp
-  polybench/syrk.cpp
 
-  # compiletime/compiletime.cpp
-  spec_constants/spec_constant_convolution.cpp
+  # micro/arith.cpp
+  # micro/DRAM.cpp
+  # micro/host_device_bandwidth.cpp
+  # micro/pattern_L2.cpp
+  # micro/sf.cpp
+  # micro/local_mem.cpp
+
+  intel/vec_add.cpp
+  intel/matrix_mul.cpp
 )
 
 # Setting variables
@@ -127,18 +102,17 @@ foreach(benchmark IN LISTS benchmarks)
 
   add_executable(${target} ${benchmark})
 
+  if(ENABLED_TIME_EVENT_PROFILING)
+    target_compile_definitions(${target} PUBLIC SYCL_BENCH_ENABLE_QUEUE_PROFILING=1)
+  endif()
   if(SYCL_IMPL STREQUAL "AdaptiveCpp")
-    add_sycl_to_target(TARGET ${target} SOURCES ${benchmark})
+  add_sycl_to_target(TARGET ${target} SOURCES ${benchmark})
   endif()
 
   if(SYCL_IMPL STREQUAL "dpcpp")
     target_compile_definitions(${target} PRIVATE __DPCPP__)
   endif()
-
-  if(SYCL_IMPL STREQUAL "triSYCL")
-    add_sycl_to_target(${target})
-    target_compile_definitions(${target} PRIVATE __TRISYCL__)
-  endif()
+  
 
   install(TARGETS ${target} RUNTIME DESTINATION bin/benchmarks/)
   get_filename_component(dir ${benchmark} DIRECTORY)
@@ -147,5 +121,6 @@ endforeach(benchmark)
 
 # The "compiletime" target should only be used in the context of the compile time evaluation script
 # set_target_properties(compiletime PROPERTIES EXCLUDE_FROM_ALL 1)
+
 install(PROGRAMS bin/run-suite DESTINATION bin/)
 install(FILES ${PROJECT_SOURCE_DIR}/Brommy.bmp DESTINATION share/)

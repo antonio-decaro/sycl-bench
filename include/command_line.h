@@ -128,6 +128,7 @@ struct BenchmarkArgs {
   size_t problem_size;
   size_t local_size;
   size_t num_runs;
+  size_t num_iters;
   sycl::queue device_queue;
   VerificationSetting verification;
   // can be used to query additional benchmark specific information from the command line
@@ -144,6 +145,7 @@ public:
     std::size_t size = cli_parser.getOrDefault<std::size_t>("--size", 3072);
     std::size_t local_size = cli_parser.getOrDefault<std::size_t>("--local", 256);
     std::size_t num_runs = cli_parser.getOrDefault<std::size_t>("--num-runs", 5);
+    std::size_t num_iters = cli_parser.getOrDefault<std::size_t>("--num-iters", 1);
 
     std::string device_type = cli_parser.getOrDefault<std::string>("--device", "default");
     sycl::queue q = getQueue(device_type);
@@ -158,7 +160,7 @@ public:
 
     auto result_consumer = getResultConsumer(cli_parser.getOrDefault<std::string>("--output", "stdio"));
 
-    return BenchmarkArgs{size, local_size, num_runs, q,
+    return BenchmarkArgs{size, local_size, num_runs, num_iters, q,
         VerificationSetting{verification_enabled, verification_begin, verification_range}, cli_parser, result_consumer};
   }
 
