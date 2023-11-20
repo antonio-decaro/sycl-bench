@@ -83,15 +83,11 @@ endif()
 
 set(benchmarks
 
-  # micro/arith.cpp
-  # micro/DRAM.cpp
-  # micro/host_device_bandwidth.cpp
-  # micro/pattern_L2.cpp
-  # micro/sf.cpp
-  # micro/local_mem.cpp
-
   intel/vec_add.cpp
+  intel/nbody.cpp
   intel/matrix_mul.cpp
+  intel/scalar_prod.cpp
+  intel/sobel.cpp
 )
 
 # Setting variables
