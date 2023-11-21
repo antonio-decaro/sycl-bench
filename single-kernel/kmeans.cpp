@@ -7,10 +7,10 @@
 
 // using namespace sycl;
 namespace s = sycl;
-template <typename T>
+template <typename T, size_t sg_size>
 class KmeansKernel;
 
-template <typename T>
+template <typename T, size_t sg_size>
 class KmeansBench {
 protected:
   std::vector<T> features;
@@ -55,9 +55,9 @@ public:
 
       sycl::range<1> ndrange(args.problem_size);
 
-      cgh.parallel_for<class KmeansKernel<T>>(
+      cgh.parallel_for<class KmeansKernel<T, sg_size>>(
           ndrange, [features, clusters, membership, problem_size = args.problem_size, nclusters_ = nclusters,
-                       nfeatures_ = nfeatures](sycl::id<1> idx) {
+                       nfeatures_ = nfeatures](sycl::id<1> idx) [[intel::reqd_sub_group_size(sg_size)]] {
             size_t gid = idx[0];
 
             if(gid < problem_size) {
@@ -117,16 +117,28 @@ public:
     std::stringstream name;
     name << "Kmeans_";
     name << ReadableTypename<T>::name;
+    name << "_sg";
+    name << sg_size;
     return name.str();
   }
 };
 
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
-  app.run<KmeansBench<float>>();
+  app.run<KmeansBench<float, 8>>();
   if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
     if(app.deviceSupportsFP64())
-      app.run<KmeansBench<double>>();
+      app.run<KmeansBench<double, 8>>();
+  }
+  app.run<KmeansBench<float, 16>>();
+  if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
+    if(app.deviceSupportsFP64())
+      app.run<KmeansBench<double, 16>>();
+  }
+  app.run<KmeansBench<float, 32>>();
+  if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
+    if(app.deviceSupportsFP64())
+      app.run<KmeansBench<double, 32>>();
   }
   return 0;
 }

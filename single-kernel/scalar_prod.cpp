@@ -7,19 +7,19 @@
 // using namespace sycl;
 namespace s = sycl;
 
-template <typename T, bool>
+template <typename T, size_t sg_size, bool>
 class ScalarProdKernel;
-template <typename T, bool>
+template <typename T, size_t sg_size, bool>
 class ScalarProdKernelHierarchical;
 
-template <typename T, bool>
+template <typename T, size_t sg_size, bool>
 class ScalarProdReduction;
-template <typename T, bool>
+template <typename T, size_t sg_size, bool>
 class ScalarProdReductionHierarchical;
-template <typename T, bool>
+template <typename T, size_t sg_size, bool>
 class ScalarProdGatherKernel;
 
-template <typename T, bool Use_ndrange = true>
+template <typename T, size_t sg_size, bool Use_ndrange = true>
 class ScalarProdBench {
 protected:
   std::vector<T> input1;
@@ -61,12 +61,12 @@ public:
       if(Use_ndrange) {
         sycl::nd_range<1> ndrange(args.problem_size, args.local_size);
 
-        cgh.parallel_for<class ScalarProdKernel<T, Use_ndrange>>(ndrange, [=](sycl::nd_item<1> item) {
+        cgh.parallel_for<class ScalarProdKernel<T, sg_size, Use_ndrange>>(ndrange, [=](sycl::nd_item<1> item) [[intel::reqd_sub_group_size(sg_size)]] {
           size_t gid = item.get_global_linear_id();
           intermediate_product[gid] = in1[gid] * in2[gid];
         });
       } else {
-        cgh.parallel_for_work_group<class ScalarProdKernelHierarchical<T, Use_ndrange>>(
+        cgh.parallel_for_work_group<class ScalarProdKernelHierarchical<T, sg_size, Use_ndrange>>(
             sycl::range<1>{args.problem_size / args.local_size}, sycl::range<1>{args.local_size},
             [=](sycl::group<1> grp) {
               grp.parallel_for_work_item([&](sycl::h_item<1> idx) {
@@ -97,7 +97,7 @@ public:
         sycl::nd_range<1> ndrange(n_wgroups * wgroup_size, wgroup_size);
 
         if(Use_ndrange) {
-          cgh.parallel_for<class ScalarProdReduction<T, Use_ndrange>>(ndrange, [=](sycl::nd_item<1> item) {
+          cgh.parallel_for<class ScalarProdReduction<T, sg_size, Use_ndrange>>(ndrange, [=](sycl::nd_item<1> item) {
             size_t gid = item.get_global_linear_id();
             size_t lid = item.get_local_linear_id();
 
@@ -128,7 +128,7 @@ public:
             }
           });
         } else {
-          cgh.parallel_for_work_group<class ScalarProdReductionHierarchical<T, Use_ndrange>>(
+          cgh.parallel_for_work_group<class ScalarProdReductionHierarchical<T, sg_size, Use_ndrange>>(
               sycl::range<1>{n_wgroups}, sycl::range<1>{wgroup_size}, [=](sycl::group<1> grp) {
                 grp.parallel_for_work_item([&](sycl::h_item<1> idx) {
                   const size_t gid = idx.get_global_id(0);
@@ -168,7 +168,7 @@ public:
       events.push_back(args.device_queue.submit([&](sycl::handler& cgh) {
         auto global_mem = output_buf.template get_access<s::access::mode::read_write>(cgh);
 
-        cgh.parallel_for<ScalarProdGatherKernel<T, Use_ndrange>>(
+        cgh.parallel_for<ScalarProdGatherKernel<T, sg_size, Use_ndrange>>(
             sycl::range<1>{n_wgroups}, [=](sycl::id<1> idx) { global_mem[idx] = global_mem[idx * wgroup_size]; });
       }));
       array_size = n_wgroups;
@@ -202,28 +202,30 @@ public:
     name << "ScalarProduct_";
     name << (Use_ndrange ? "NDRange_" : "Hierarchical_");
     name << ReadableTypename<T>::name;
+    name << "_sg";
+    name << sg_size;
     return name.str();
   }
 };
 
-int main(int argc, char** argv) {
-  BenchmarkApp app(argc, argv);
+template <size_t sg_size>
+void run_helper(BenchmarkApp& app) {
   if(app.shouldRunNDRangeKernels()) {
-    app.run<ScalarProdBench<int, true>>();
-    app.run<ScalarProdBench<long long, true>>();
-    app.run<ScalarProdBench<float, true>>();
+    app.run<ScalarProdBench<int, sg_size, true>>();
+    app.run<ScalarProdBench<long long, sg_size, true>>();
+    app.run<ScalarProdBench<float, sg_size, true>>();
     if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
       if(app.deviceSupportsFP64())
         app.run<ScalarProdBench<double, true>>();
     }
   }
+}
 
-  app.run<ScalarProdBench<int, false>>();
-  app.run<ScalarProdBench<long long, false>>();
-  app.run<ScalarProdBench<float, false>>();
-  if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
-    if(app.deviceSupportsFP64())
-      app.run<ScalarProdBench<double, false>>();
-  }
+int main(int argc, char** argv) {
+  BenchmarkApp app(argc, argv);
+  
+  run_helper<8>(app);
+  run_helper<16>(app);
+  run_helper<32>(app);
   return 0;
 }

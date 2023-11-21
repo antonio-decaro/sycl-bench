@@ -6,6 +6,7 @@
 
 
 namespace s = sycl;
+template <size_t sg_size>
 class MedianFilterBenchKernel; // kernel forward declaration
 
 void swap(sycl::float4 A[], int i, int j) {
@@ -22,6 +23,7 @@ void swap(sycl::float4 A[], int i, int j) {
   A median filter with a windows of 3 pixels (3x3).
   Input and output are two-dimensional buffers of floats.
  */
+template <size_t sg_size>
 class MedianFilterBench {
 protected:
   std::vector<sycl::float4> input;
@@ -40,7 +42,7 @@ public:
   void setup() {
     size = args.problem_size; // input size defined by the user
     input.resize(size * size);
-    load_bitmap_mirrored("../../share/Brommy.bmp", size, input);
+    load_bitmap_mirrored("./Brommy.bmp", size, input);
     output.resize(size * size);
 
     input_buf.initialize(args.device_queue, input.data(), s::range<2>(size, size));
@@ -53,7 +55,7 @@ public:
       auto out = output_buf.get_access<s::access::mode::discard_write>(cgh);
       sycl::range<2> ndrange{size, size};
 
-      cgh.parallel_for<class MedianFilterBenchKernel>(ndrange, [in, out, size_ = size](sycl::id<2> gid) {
+      cgh.parallel_for<class MedianFilterBenchKernel<sg_size>>(ndrange, [in, out, size_ = size](sycl::id<2> gid) [[intel::reqd_sub_group_size(sg_size)]] {
         int x = gid[0];
         int y = gid[1];
 
@@ -176,13 +178,20 @@ public:
   }
 
 
-  static std::string getBenchmarkName() { return "MedianFilter"; }
+  static std::string getBenchmarkName() { 
+    std::stringstream name;
+    name << "MedianFilterBench_sg";
+    name << sg_size;
+    return name.str();
+  }
 
 }; // MedianFilterBench class
 
 
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
-  app.run<MedianFilterBench>();
+  app.run<MedianFilterBench<8>>();
+  app.run<MedianFilterBench<16>>();
+  app.run<MedianFilterBench<32>>();
   return 0;
 }

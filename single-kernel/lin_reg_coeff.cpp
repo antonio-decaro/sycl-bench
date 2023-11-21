@@ -4,12 +4,12 @@
 // using namespace sycl;
 namespace s = sycl;
 
-template <typename T>
+template <typename T, size_t sg_size>
 class VecProductKernel;
-template <typename T>
+template <typename T, size_t sg_size>
 class VecReduceKernel;
 
-template <typename T>
+template <typename T, size_t sg_size>
 class LinearRegressionCoeffBench {
 protected:
   std::vector<T> input1;
@@ -60,7 +60,7 @@ public:
 
       sycl::nd_range<1> ndrange(args.problem_size, args.local_size);
 
-      cgh.parallel_for<class VecProductKernel<T>>(ndrange, [=](sycl::nd_item<1> item) {
+      cgh.parallel_for<class VecProductKernel<T, sg_size>>(ndrange, [=](sycl::nd_item<1> item) [[intel::reqd_sub_group_size(sg_size)]] {
         size_t gid = item.get_global_linear_id();
         intermediate_product[gid] = in1[gid] * in2[gid];
       });
@@ -84,7 +84,7 @@ public:
         auto local_mem = s::local_accessor<T, 1>{s::range<1>(wgroup_size), cgh};
         sycl::nd_range<1> ndrange(n_wgroups * wgroup_size, wgroup_size);
 
-        cgh.parallel_for<class VecReduceKernel<T>>(ndrange, [=](sycl::nd_item<1> item) {
+        cgh.parallel_for<class VecReduceKernel<T, sg_size>>(ndrange, [=](sycl::nd_item<1> item) {
           size_t gid = item.get_global_linear_id();
           size_t lid = item.get_local_linear_id();
 
@@ -183,6 +183,8 @@ public:
     std::stringstream name;
     name << "LinearRegressionCoeff_";
     name << ReadableTypename<T>::name;
+    name << "_sg";
+    name << sg_size;
     return name.str();
   }
 };
@@ -190,10 +192,24 @@ public:
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
   if(app.shouldRunNDRangeKernels()) {
-    app.run<LinearRegressionCoeffBench<float>>();
+    app.run<LinearRegressionCoeffBench<float, 8>>();
     if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
       if(app.deviceSupportsFP64())
-        app.run<LinearRegressionCoeffBench<double>>();
+        app.run<LinearRegressionCoeffBench<double, 8>>();
+    }
+  }
+  if(app.shouldRunNDRangeKernels()) {
+    app.run<LinearRegressionCoeffBench<float, 16>>();
+    if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
+      if(app.deviceSupportsFP64())
+        app.run<LinearRegressionCoeffBench<double, 16>>();
+    }
+  }
+  if(app.shouldRunNDRangeKernels()) {
+    app.run<LinearRegressionCoeffBench<float, 32>>();
+    if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
+      if(app.deviceSupportsFP64())
+        app.run<LinearRegressionCoeffBench<double, 32>>();
     }
   }
   return 0;

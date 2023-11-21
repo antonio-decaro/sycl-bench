@@ -3,8 +3,10 @@
 
 // using namespace sycl;
 namespace s = sycl;
+template<size_t sg_size>
 class MolecularDynamicsKernel;
 
+template<size_t sg_size>
 class MolecularDynamicsBench {
 protected:
   std::vector<s::float4> input;
@@ -57,9 +59,9 @@ public:
 
       sycl::range<1> ndrange(args.problem_size);
 
-      cgh.parallel_for<class MolecularDynamicsKernel>(
+      cgh.parallel_for<class MolecularDynamicsKernel<sg_size>>(
           ndrange, [=, problem_size = args.problem_size, neighCount_ = neighCount, inum_ = inum, cutsq_ = cutsq,
-                       lj1_ = lj1, lj2_ = lj2](sycl::id<1> idx) {
+                       lj1_ = lj1, lj2_ = lj2](sycl::id<1> idx) [[intel::reqd_sub_group_size(sg_size)]] {
             size_t gid = idx[0];
 
             if(gid < problem_size) {
@@ -135,11 +137,18 @@ public:
     return pass;
   }
 
-  static std::string getBenchmarkName() { return "MolecularDynamics"; }
+  static std::string getBenchmarkName() { 
+    std::stringstream name;
+    name << "MolecularDynamics_sg";
+    name << sg_size;
+    return name.str();
+  }
 };
 
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
-  app.run<MolecularDynamicsBench>();
+  app.run<MolecularDynamicsBench<8>>();
+  app.run<MolecularDynamicsBench<16>>();
+  app.run<MolecularDynamicsBench<32>>();
   return 0;
 }

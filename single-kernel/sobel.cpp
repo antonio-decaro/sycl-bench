@@ -6,12 +6,14 @@
 
 
 namespace s = sycl;
+template<size_t sg_size>
 class SobelBenchKernel; // kernel forward declaration
 
 /*
   A Sobel filter with a convolution matrix 3x3.
   Input and output are two-dimensional buffers of floats.
  */
+template<size_t sg_size>
 class SobelBench {
 protected:
   std::vector<sycl::float4> input;
@@ -31,7 +33,7 @@ public:
   void setup() {
     size = args.problem_size; // input size defined by the user
     input.resize(size * size);
-    load_bitmap_mirrored("../../share/Brommy.bmp", size, input);
+    load_bitmap_mirrored("./Brommy.bmp", size, input);
     output.resize(size * size);
 
     input_buf.initialize(args.device_queue, input.data(), s::range<2>(size, size));
@@ -47,7 +49,7 @@ public:
       // Sobel kernel 3x3
       const float kernel[] = {1, 0, -1, 2, 0, -2, 1, 0, -1};
 
-      cgh.parallel_for<class SobelBenchKernel>(ndrange, [in, out, kernel, size_ = size](sycl::id<2> gid) {
+      cgh.parallel_for<class SobelBenchKernel<sg_size>>(ndrange, [in, out, kernel, size_ = size](sycl::id<2> gid) [[intel::reqd_sub_group_size(sg_size)]] {
         int x = gid[0];
         int y = gid[1];
         sycl::float4 Gx = sycl::float4(0, 0, 0, 0);
@@ -139,13 +141,21 @@ public:
   }
 
 
-  static std::string getBenchmarkName() { return "Sobel3"; }
+  static std::string getBenchmarkName() { 
+    std::stringstream name;
+    name << "Sobel3_sg";
+    name << sg_size;
+  
+    return name.str();
+  }
 
 }; // SobelBench class
 
 
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
-  app.run<SobelBench>();
+  app.run<SobelBench<8>>();
+  app.run<SobelBench<16>>();
+  app.run<SobelBench<32>>();
   return 0;
 }

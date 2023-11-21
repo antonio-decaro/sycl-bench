@@ -6,13 +6,13 @@
 
 using namespace sycl;
 
-template <class float_type>
+template <class float_type, size_t sg_size>
 class NDRangeNBodyKernel;
 template <class float_type>
 class HierarchicalNBodyKernel;
 
 
-template <class float_type>
+template <class float_type, size_t sg_size>
 class NBody {
 protected:
   using particle_type = sycl::vec<float_type, 4>;
@@ -125,8 +125,8 @@ protected:
 
       auto scratch = sycl::local_accessor<particle_type, 1>{sycl::range<1>{args.local_size}, cgh};
 
-      cgh.parallel_for<NDRangeNBodyKernel<float_type>>(execution_range,
-          [=, dt = this->dt, gravitational_softening = this->gravitational_softening](sycl::nd_item<1> tid) {
+      cgh.parallel_for<NDRangeNBodyKernel<float_type, sg_size>>(execution_range,
+          [=, dt = this->dt, gravitational_softening = this->gravitational_softening](sycl::nd_item<1> tid) [[intel::reqd_sub_group_size(sg_size)]] {
             const size_t global_id = tid.get_global_id(0);
             const size_t local_id = tid.get_local_id(0);
             const size_t num_particles = tid.get_global_range()[0];
@@ -256,13 +256,13 @@ protected:
   }
 };
 
-template <class float_type>
-class NBodyNDRange : public NBody<float_type> {
+template <class float_type, size_t sg_size>
+class NBodyNDRange : public NBody<float_type, sg_size> {
 public:
-  using typename NBody<float_type>::particle_type;
-  using typename NBody<float_type>::vector_type;
+  using typename NBody<float_type, sg_size>::particle_type;
+  using typename NBody<float_type, sg_size>::vector_type;
 
-  NBodyNDRange(const BenchmarkArgs& _args) : NBody<float_type>{_args} {}
+  NBodyNDRange(const BenchmarkArgs& _args) : NBody<float_type, sg_size>{_args} {}
 
 
   void run() { this->submitNDRange(this->particles_buf.get(), this->velocities_buf.get()); }
@@ -271,18 +271,20 @@ public:
     std::stringstream name;
     name << "NBody_NDRange_";
     name << ReadableTypename<float_type>::name;
+    name << "_sg";
+    name << sg_size;
     return name.str();
   }
 };
 
 
-template <class float_type>
-class NBodyHierarchical : public NBody<float_type> {
+template <class float_type, size_t sg_size>
+class NBodyHierarchical : public NBody<float_type, sg_size> {
 public:
-  using typename NBody<float_type>::particle_type;
-  using typename NBody<float_type>::vector_type;
+  using typename NBody<float_type, sg_size>::particle_type;
+  using typename NBody<float_type, sg_size>::vector_type;
 
-  NBodyHierarchical(const BenchmarkArgs& _args) : NBody<float_type>{_args} {}
+  NBodyHierarchical(const BenchmarkArgs& _args) : NBody<float_type, sg_size>{_args} {}
 
 
   void run() { this->submitHierarchical(this->particles_buf.get(), this->velocities_buf.get()); }
@@ -299,17 +301,14 @@ public:
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
 
-  app.run<NBodyHierarchical<float>>();
+  app.run<NBodyNDRange<float, 8>>();
+  app.run<NBodyNDRange<float, 16>>();
+  app.run<NBodyNDRange<float, 32>>();
   if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
     if(app.deviceSupportsFP64())
-      app.run<NBodyHierarchical<double>>();
-  }
-  if(app.shouldRunNDRangeKernels()) {
-    app.run<NBodyNDRange<float>>();
-    if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
-      if(app.deviceSupportsFP64())
-        app.run<NBodyNDRange<double>>();
-    }
+      app.run<NBodyNDRange<double, 8>>();
+      app.run<NBodyNDRange<double, 16>>();
+      app.run<NBodyNDRange<double, 32>>();
   }
 
   return 0;

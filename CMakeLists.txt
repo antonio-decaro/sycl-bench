@@ -100,6 +100,7 @@ set(benchmarks
   single-kernel/kmeans.cpp
   single-kernel/mol_dyn.cpp
   single-kernel/nbody.cpp
+  single-kernel/matrix_mul.cpp
 
   pattern/segmentedreduction.cpp
   pattern/reduction.cpp

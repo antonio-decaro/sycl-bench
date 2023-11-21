@@ -7,10 +7,10 @@
 // avoid it
 // using namespace sycl;
 namespace s = sycl;
-template <typename T>
+template <typename T, size_t sg_size>
 class VecAddKernel;
 
-template <typename T>
+template <typename T, size_t sg_size>
 class VecAddBench {
 protected:
   std::vector<T> input1;
@@ -50,7 +50,10 @@ public:
       auto out = output_buf.template get_access<s::access::mode::discard_write>(cgh);
       sycl::range<1> ndrange{args.problem_size};
 
-      cgh.parallel_for<class VecAddKernel<T>>(ndrange, [=](sycl::id<1> gid) { out[gid] = in1[gid] + in2[gid]; });
+      cgh.parallel_for<class VecAddKernel<T, sg_size>>(ndrange, [=, iters=args.num_iters](sycl::id<1> gid) [[intel::reqd_sub_group_size(sg_size)]] {
+        for (int _ = 0; _ < iters; _++)
+          out[gid] = in1[gid] + in2[gid]; 
+      });
     }));
   }
 
@@ -73,18 +76,38 @@ public:
     std::stringstream name;
     name << "VectorAddition_";
     name << ReadableTypename<T>::name;
+    name << "_sg";
+    name << sg_size;
+    
     return name.str();
   }
 };
 
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
-  app.run<VecAddBench<int>>();
-  app.run<VecAddBench<long long>>();
-  app.run<VecAddBench<float>>();
+
+  app.run<VecAddBench<int, 8>>();
+  app.run<VecAddBench<long long, 8>>();
+  app.run<VecAddBench<float, 8>>();
   if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
     if(app.deviceSupportsFP64())
-      app.run<VecAddBench<double>>();
+      app.run<VecAddBench<double, 8>>();
+  }
+
+  app.run<VecAddBench<int, 16>>();
+  app.run<VecAddBench<long long, 16>>();
+  app.run<VecAddBench<float, 16>>();
+  if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
+    if(app.deviceSupportsFP64())
+      app.run<VecAddBench<double, 16>>();
+  }
+
+  app.run<VecAddBench<int, 32>>();
+  app.run<VecAddBench<long long, 32>>();
+  app.run<VecAddBench<float, 32>>();
+  if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
+    if(app.deviceSupportsFP64())
+      app.run<VecAddBench<double, 32>>();
   }
   return 0;
 }
