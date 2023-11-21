@@ -148,7 +148,12 @@ public:
   bool verify(VerificationSetting& ver) { return true; }
 
 
-  static std::string getBenchmarkName() { return "Merse Twister"; }
+  static std::string getBenchmarkName() { 
+    std::stringstream name;
+    name << "MerseTwister";
+    name << "_sg" << sg_size;
+    return name.str();
+  }
 
 }; // MerseTwister class
 
