@@ -190,7 +190,9 @@ public:
 
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
-  app.run<MedianFilterBench<8>>();
+  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+    app.run<MedianFilterBench<8>>();
+  }
   app.run<MedianFilterBench<16>>();
   app.run<MedianFilterBench<32>>();
   return 0;

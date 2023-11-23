@@ -191,11 +191,14 @@ public:
 
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
-  if(app.shouldRunNDRangeKernels()) {
-    app.run<LinearRegressionCoeffBench<float, 8>>();
-    if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
-      if(app.deviceSupportsFP64())
-        app.run<LinearRegressionCoeffBench<double, 8>>();
+
+  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+    if(app.shouldRunNDRangeKernels()) {
+      app.run<LinearRegressionCoeffBench<float, 8>>();
+      if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
+        if(app.deviceSupportsFP64())
+          app.run<LinearRegressionCoeffBench<double, 8>>();
+      }
     }
   }
   if(app.shouldRunNDRangeKernels()) {

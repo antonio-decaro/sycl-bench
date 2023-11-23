@@ -160,7 +160,9 @@ public:
 
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
-  app.run<MerseTwister<8>>();
+  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+    app.run<MerseTwister<8>>();
+  }
   app.run<MerseTwister<16>>();
   app.run<MerseTwister<32>>();
   return 0;

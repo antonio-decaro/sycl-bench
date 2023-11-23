@@ -125,10 +125,13 @@ public:
 
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
-  app.run<KmeansBench<float, 8>>();
-  if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
-    if(app.deviceSupportsFP64())
-      app.run<KmeansBench<double, 8>>();
+
+  if constexpr(SYCL_BENCH_SUPPORTS_SG_8) {
+    app.run<KmeansBench<float, 8>>();
+    if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
+      if(app.deviceSupportsFP64())
+        app.run<KmeansBench<double, 8>>();
+    }
   }
   app.run<KmeansBench<float, 16>>();
   if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {

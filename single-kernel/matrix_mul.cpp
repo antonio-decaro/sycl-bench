@@ -82,16 +82,24 @@ public:
 
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
-  app.run<MatrixMulAcc<int, 8>>();
+
+  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+    app.run<MatrixMulAcc<int, 8>>();
+
+  }
   app.run<MatrixMulAcc<int, 16>>();
   app.run<MatrixMulAcc<int, 32>>();
   
-  app.run<MatrixMulAcc<float, 8>>();
+  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+    app.run<MatrixMulAcc<float, 8>>();
+  }
   app.run<MatrixMulAcc<float, 16>>();
   app.run<MatrixMulAcc<float, 32>>();
 
   if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
-    app.run<MatrixMulAcc<double, 8>>();
+    if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+      app.run<MatrixMulAcc<double, 8>>();
+    }
     app.run<MatrixMulAcc<double, 16>>();
     app.run<MatrixMulAcc<double, 32>>();    
   }

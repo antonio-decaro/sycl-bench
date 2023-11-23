@@ -301,12 +301,16 @@ public:
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
 
-  app.run<NBodyNDRange<float, 8>>();
+  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+    app.run<NBodyNDRange<float, 8>>();
+  }
   app.run<NBodyNDRange<float, 16>>();
   app.run<NBodyNDRange<float, 32>>();
   if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
     if(app.deviceSupportsFP64())
-      app.run<NBodyNDRange<double, 8>>();
+      if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+        app.run<NBodyNDRange<double, 8>>();
+      }
       app.run<NBodyNDRange<double, 16>>();
       app.run<NBodyNDRange<double, 32>>();
   }

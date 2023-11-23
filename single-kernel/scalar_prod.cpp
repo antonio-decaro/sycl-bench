@@ -224,7 +224,9 @@ void run_helper(BenchmarkApp& app) {
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
   
-  run_helper<8>(app);
+  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+    run_helper<8>(app);
+  }
   run_helper<16>(app);
   run_helper<32>(app);
   return 0;

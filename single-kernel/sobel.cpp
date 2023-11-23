@@ -154,7 +154,9 @@ public:
 
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
-  app.run<SobelBench<8>>();
+  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+    app.run<SobelBench<8>>();
+  }
   app.run<SobelBench<16>>();
   app.run<SobelBench<32>>();
   return 0;

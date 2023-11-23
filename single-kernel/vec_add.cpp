@@ -86,12 +86,14 @@ public:
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
 
-  app.run<VecAddBench<int, 8>>();
-  app.run<VecAddBench<long long, 8>>();
-  app.run<VecAddBench<float, 8>>();
-  if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
-    if(app.deviceSupportsFP64())
-      app.run<VecAddBench<double, 8>>();
+  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+    app.run<VecAddBench<int, 8>>();
+    app.run<VecAddBench<long long, 8>>();
+    app.run<VecAddBench<float, 8>>();
+    if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
+      if(app.deviceSupportsFP64())
+        app.run<VecAddBench<double, 8>>();
+    }
   }
 
   app.run<VecAddBench<int, 16>>();

@@ -29,6 +29,7 @@ include_directories(${CMAKE_SOURCE_DIR}/polybench/common)
 set(SYCL_IMPL "" CACHE STRING "Select SYCL implementation")
 set_property(CACHE SYCL_IMPL PROPERTY STRINGS "dpcpp" "AdaptiveCpp" "triSYCL")
 option(ENABLED_TIME_EVENT_PROFILING "Enable time profiling with sycl event" OFF)
+option(SYCL_BENCH_SUPPORTS_SG_8 "Enable SubGroup size 8" OFF)
 
 set(supported_implementations
   AdaptiveCpp
@@ -36,7 +37,6 @@ set(supported_implementations
   triSYCL
 )# SYCL Bench variables
 option(SYCL_BENCH_ENABLE_FP64_BENCHMARKS "Enable FP64 benchmarks" ON)
-
 
 
 list(FIND supported_implementations ${SYCL_IMPL} impl_idx)
@@ -132,6 +132,7 @@ set(benchmarks
 )
 
 # Setting variables
+add_compile_definitions(SYCL_BENCH_SUPPORTS_SG_8=$<BOOL:${SYCL_BENCH_SUPPORTS_SG_8}>)
 add_compile_definitions(SYCL_BENCH_ENABLE_FP64_BENCHMARKS=$<BOOL:${SYCL_BENCH_ENABLE_FP64_BENCHMARKS}>)
 
 foreach(benchmark IN LISTS benchmarks)
