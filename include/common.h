@@ -172,6 +172,14 @@ public:
 
   bool deviceSupportsFP64() const { return deviceHasAspect(sycl::aspect::fp64); }
 
+  bool deviceSupportsSG(size_t sg_size) const { 
+    if (deviceHasAspect(sycl::aspect::ext_intel_gpu_eu_simd_width)) {
+      auto r = device_queue.get_device().template get_info<sycl::info::device::sub_group_sizes>();
+      return std::find(r.begin(), r.end(), sg_size) != r.end();
+    }
+    return false;
+  }
+
   template <class Benchmark, typename... AdditionalArgs>
   void run(AdditionalArgs&&... additional_args) {
     try {
