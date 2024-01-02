@@ -214,20 +214,23 @@ void run_helper(BenchmarkApp& app) {
     app.run<ScalarProdBench<int, sg_size, true>>();
     app.run<ScalarProdBench<long long, sg_size, true>>();
     app.run<ScalarProdBench<float, sg_size, true>>();
-    if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
-      if(app.deviceSupportsFP64())
-        app.run<ScalarProdBench<double, true>>();
-    }
+    if(app.deviceSupportsFP64())
+      app.run<ScalarProdBench<double, true>>();
   }
 }
 
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
   
-  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+  if (app.deviceSupportsSG(8)) {
     run_helper<8>(app);
   }
-  run_helper<16>(app);
-  run_helper<32>(app);
+  if (app.deviceSupportsSG(16)) {
+    run_helper<16>(app);
+  }
+  if (app.deviceSupportsSG(32)) {
+    run_helper<32>(app);
+  }
+  
   return 0;
 }

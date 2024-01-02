@@ -86,30 +86,29 @@ public:
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
 
-  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+  if (app.deviceSupportsSG(8)) {
     app.run<VecAddBench<int, 8>>();
     app.run<VecAddBench<long long, 8>>();
     app.run<VecAddBench<float, 8>>();
-    if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
-      if(app.deviceSupportsFP64())
-        app.run<VecAddBench<double, 8>>();
-    }
+    if(app.deviceSupportsFP64())
+      app.run<VecAddBench<double, 8>>();
   }
 
-  app.run<VecAddBench<int, 16>>();
-  app.run<VecAddBench<long long, 16>>();
-  app.run<VecAddBench<float, 16>>();
-  if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
+  if (app.deviceSupportsSG(16)) {
+    app.run<VecAddBench<int, 16>>();
+    app.run<VecAddBench<long long, 16>>();
+    app.run<VecAddBench<float, 16>>();
     if(app.deviceSupportsFP64())
       app.run<VecAddBench<double, 16>>();
   }
 
-  app.run<VecAddBench<int, 32>>();
-  app.run<VecAddBench<long long, 32>>();
-  app.run<VecAddBench<float, 32>>();
-  if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
+  if (app.deviceSupportsSG(32)) {
+    app.run<VecAddBench<int, 32>>();
+    app.run<VecAddBench<long long, 32>>();
+    app.run<VecAddBench<float, 32>>();
     if(app.deviceSupportsFP64())
       app.run<VecAddBench<double, 32>>();
   }
+
   return 0;
 }

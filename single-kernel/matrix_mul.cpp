@@ -83,25 +83,32 @@ public:
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
 
-  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+  if (app.deviceSupportsSG(8)) {
     app.run<MatrixMulAcc<int, 8>>();
-
-  }
-  app.run<MatrixMulAcc<int, 16>>();
-  app.run<MatrixMulAcc<int, 32>>();
-  
-  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+    app.run<MatrixMulAcc<long long, 8>>();
     app.run<MatrixMulAcc<float, 8>>();
-  }
-  app.run<MatrixMulAcc<float, 16>>();
-  app.run<MatrixMulAcc<float, 32>>();
-
-  if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
-    if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+    if (app.deviceSupportsFP64()) {
       app.run<MatrixMulAcc<double, 8>>();
     }
-    app.run<MatrixMulAcc<double, 16>>();
-    app.run<MatrixMulAcc<double, 32>>();    
   }
+
+  if (app.deviceSupportsSG(16)) {
+    app.run<MatrixMulAcc<int, 16>>();
+    app.run<MatrixMulAcc<long long, 16>>();
+    app.run<MatrixMulAcc<float, 16>>();
+    if (app.deviceSupportsFP64()) {
+      app.run<MatrixMulAcc<double, 16>>();
+    }
+  }
+
+  if (app.deviceSupportsSG(32)) {
+    app.run<MatrixMulAcc<int, 32>>();
+    app.run<MatrixMulAcc<long long, 32>>();
+    app.run<MatrixMulAcc<float, 32>>();
+    if (app.deviceSupportsFP64()) {
+      app.run<MatrixMulAcc<double, 32>>();
+    }
+  }
+  
   return 0;
 }

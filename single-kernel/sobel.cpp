@@ -154,10 +154,14 @@ public:
 
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
-  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
+  if (app.deviceSupportsSG(8)) {
     app.run<SobelBench<8>>();
   }
-  app.run<SobelBench<16>>();
-  app.run<SobelBench<32>>();
+  if (app.deviceSupportsSG(16)) {
+    app.run<SobelBench<16>>();
+  }
+  if (app.deviceSupportsSG(32)) {
+    app.run<SobelBench<32>>();
+  }
   return 0;
 }

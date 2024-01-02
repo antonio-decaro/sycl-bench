@@ -192,28 +192,23 @@ public:
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
 
-  if constexpr (SYCL_BENCH_SUPPORTS_SG_8) {
-    if(app.shouldRunNDRangeKernels()) {
-      app.run<LinearRegressionCoeffBench<float, 8>>();
-      if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
-        if(app.deviceSupportsFP64())
-          app.run<LinearRegressionCoeffBench<double, 8>>();
-      }
-    }
+  if (app.deviceSupportsSG(8)) {
+    app.run<LinearRegressionCoeffBench<float, 8>>();
+    if(app.deviceSupportsFP64())
+      app.run<LinearRegressionCoeffBench<double, 8>>();
   }
-  if(app.shouldRunNDRangeKernels()) {
+
+  if (app.deviceSupportsSG(16)) {
     app.run<LinearRegressionCoeffBench<float, 16>>();
-    if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
-      if(app.deviceSupportsFP64())
-        app.run<LinearRegressionCoeffBench<double, 16>>();
-    }
+    if(app.deviceSupportsFP64())
+      app.run<LinearRegressionCoeffBench<double, 16>>();
   }
-  if(app.shouldRunNDRangeKernels()) {
+
+  if (app.deviceSupportsSG(32)) {
     app.run<LinearRegressionCoeffBench<float, 32>>();
-    if constexpr(SYCL_BENCH_ENABLE_FP64_BENCHMARKS) {
-      if(app.deviceSupportsFP64())
-        app.run<LinearRegressionCoeffBench<double, 32>>();
-    }
+    if(app.deviceSupportsFP64())
+      app.run<LinearRegressionCoeffBench<double, 32>>();
   }
+
   return 0;
 }
