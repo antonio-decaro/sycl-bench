@@ -114,8 +114,8 @@ public:
     sycl_csrA.row_pointers.initialize(args.device_queue, csrA.row_pointers.data(), s::range{csrA.row_pointers.size()});
 
     sycl_cscB.values.initialize(args.device_queue, cscB.values.data(), s::range{cscB.values.size()});
-    sycl_cscB.column_indices.initialize(args.device_queue, cscB.column_indices.data(), s::range{cscB.column_indices.size()});
-    sycl_cscB.row_pointers.initialize(args.device_queue, cscB.row_pointers.data(), s::range{cscB.row_pointers.size()});
+    sycl_cscB.column_pointers.initialize(args.device_queue, cscB.column_pointers.data(), s::range{cscB.column_pointers.size()});
+    sycl_cscB.row_indices.initialize(args.device_queue, cscB.row_indices.data(), s::range{cscB.row_indices.size()});
 
     c_buf.initialize(args.device_queue, c.data(), s::range{c.size()});
   }
@@ -127,12 +127,12 @@ public:
       auto csr_row_pointers = sycl_csrA.row_pointers.template get_access<s::access_mode::read>(cgh);
 
       auto csc_values = sycl_cscB.values.template get_access<s::access_mode::read>(cgh);
-      auto csc_column_pointers = sycl_cscB.column_pointerstemplate get_access<s::access_mode::read>(cgh);
-      auto csc_row_indices = sycl_cscB.row_pointers.template get_access<s::access_mode::read>(cgh);
+      auto csc_column_pointers = sycl_cscB.column_pointers.template get_access<s::access_mode::read>(cgh);
+      auto csc_row_indices = sycl_cscB.row_indices.template get_access<s::access_mode::read>(cgh);
 
       auto valuesC = c_buf.template get_access<s::access_mode::discard_write>(cgh);
 
-      cgh.parallel_for<SpGEMMKernel<T, sparsity, sg_size>>(sycl::range<2>({size, size}), [=](sycl::item<2> item) [[intel::reqd_sub_group_size(sg_size)]] {
+      cgh.parallel_for<SpGEMMKernel<T, sparsity, sg_size>>(sycl::range<2>({size, size}), [=, size=size](sycl::item<2> item) [[intel::reqd_sub_group_size(sg_size)]] {
         int rowC = item.get_id(0);
         int colC = item.get_id(1);
 
@@ -154,7 +154,7 @@ public:
           }
         }
 
-        result_matrix[item.get_linear_id()] = sum;
+        valuesC[item.get_linear_id()] = sum;
       });
     }));
   }
@@ -207,8 +207,6 @@ public:
 template<unsigned int sparsity, size_t sg_size>
 void run_helper(BenchmarkApp& app) {
   if (app.deviceSupportsSG(sg_size)) {
-    app.run<SpGEMM<int, sparsity, sg_size>>();
-    app.run<SpGEMM<long long, sparsity, sg_size>>();
     app.run<SpGEMM<float, sparsity, sg_size>>();
     if (app.deviceSupportsFP64()) {
       app.run<SpGEMM<double, sparsity, sg_size>>();
@@ -219,15 +217,15 @@ void run_helper(BenchmarkApp& app) {
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
 
-  run_helper<25, 8>(app);
-  run_helper<25, 16>(app);
-  run_helper<25, 32>(app);
+  run_helper<20, 8>(app);
+  run_helper<20, 16>(app);
+  run_helper<20, 32>(app);
   run_helper<50, 8>(app);
   run_helper<50, 16>(app);
   run_helper<50, 32>(app);
-  run_helper<75, 8>(app);
-  run_helper<75, 16>(app);
-  run_helper<75, 32>(app);
+  run_helper<80, 8>(app);
+  run_helper<80, 16>(app);
+  run_helper<80, 32>(app);
   
   return 0;
 }
