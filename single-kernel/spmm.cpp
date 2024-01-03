@@ -93,15 +93,16 @@ public:
       auto valuesB = b_buf.template get_access<s::access_mode::read>(cgh);
       auto valuesC = c_buf.template get_access<s::access_mode::discard_write>(cgh);
 
-      cgh.parallel_for<SpGEMMKernel<T, sparsity, sg_size>>(sycl::range<2>({size, size}), [=](sycl::item<2> item) [[intel::reqd_sub_group_size(sg_size)]] {
+      cgh.parallel_for<SpGEMMKernel<T, sparsity, sg_size>>(sycl::range<2>({size, size}), [=, size=size](sycl::item<2> item) [[intel::reqd_sub_group_size(sg_size)]] {
         int rowA = item.get_id(0);
+        int colB = item.get_id(1);
         int linear_id = item.get_linear_id();
-        T sum = 0;
 
+        T sum = 0;
         for (int k = row_pointersA[rowA]; k < row_pointersA[rowA + 1]; ++k) {
           int colA = col_indicesA[k];
           T valA = valuesA[k];
-          T valB = valuesB[linear_id];
+          T valB = valuesB[colA * size + colB];
           sum += valA * valB;
         }
 
@@ -152,8 +153,6 @@ public:
 template<unsigned int sparsity, size_t sg_size>
 void run_helper(BenchmarkApp& app) {
   if (app.deviceSupportsSG(sg_size)) {
-    app.run<SpMM<int, sparsity, sg_size>>();
-    app.run<SpMM<long long, sparsity, sg_size>>();
     app.run<SpMM<float, sparsity, sg_size>>();
     if (app.deviceSupportsFP64()) {
       app.run<SpMM<double, sparsity, sg_size>>();
@@ -164,15 +163,15 @@ void run_helper(BenchmarkApp& app) {
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
 
-  run_helper<25, 8>(app);
-  run_helper<25, 16>(app);
-  run_helper<25, 32>(app);
+  run_helper<20, 8>(app);
+  run_helper<20, 16>(app);
+  run_helper<20, 32>(app);
   run_helper<50, 8>(app);
   run_helper<50, 16>(app);
   run_helper<50, 32>(app);
-  run_helper<75, 8>(app);
-  run_helper<75, 16>(app);
-  run_helper<75, 32>(app);
+  run_helper<80, 8>(app);
+  run_helper<80, 16>(app);
+  run_helper<80, 32>(app);
   
   return 0;
 }
