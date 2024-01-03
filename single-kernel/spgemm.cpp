@@ -7,7 +7,7 @@
 
 namespace s = sycl;
 
-template<typename T, size_t sg_size>
+template<typename T,  unsigned int sparsity, size_t sg_size>
 class SpGEMMKernel; // kernel forward declaration
 
 template<typename T>
@@ -23,13 +23,6 @@ struct SYCL_CSRMatrix {
   PrefetchedBuffer<int, 1> column_indices;
   PrefetchedBuffer<int, 1> row_pointers;
 };
-
-int randomInt(int min, int max) {
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<int> dis(min, max);
-  return dis(gen);
-}
 
 template<typename T>
 void createRandomSparseCSR(size_t numRows, size_t numCols, float sparsity, CSRMatrix<T>& csr) {
@@ -51,7 +44,7 @@ void createRandomSparseCSR(size_t numRows, size_t numCols, float sparsity, CSRMa
   }
 }
 
-template <class T, size_t sg_size>
+template <class T, unsigned int sparsity, size_t sg_size>
 class SpGEMM {
 protected:
   size_t num_iters;
@@ -73,7 +66,6 @@ public:
   void setup() {
     size = args.problem_size; // input size defined by the user
     auto seed = args.cli.get<unsigned int>("--seed");
-    auto sparsity = args.cli.get<int>("--sparsity");
     assert (sparsity >= 0 && sparsity <= 100);
 
     srand(seed);
@@ -105,7 +97,7 @@ public:
 
       auto valuesC = c_buf.template get_access<s::access_mode::discard_write>(cgh);
 
-      cgh.parallel_for<SpGEMMKernel<T, sg_size>>(sycl::range<2>({size, size}), [=](sycl::item<2> item) [[intel::reqd_sub_group_size(sg_size)]] {
+      cgh.parallel_for<SpGEMMKernel<T, sparsity, sg_size>>(sycl::range<2>({size, size}), [=](sycl::item<2> item) [[intel::reqd_sub_group_size(sg_size)]] {
         int row = item.get_id(0);
         int col = item.get_id(1);
 
@@ -181,44 +173,38 @@ public:
 
   static std::string getBenchmarkName() { 
     std::stringstream name;
-    name << "SparseMatrixMul_";
-    name << ReadableTypename<T>::name;
-    name << "_sg";
-    name << sg_size;
+    name << "SpGEMM";
+    name << "_sp" << sparsity;
+    name << "_" << ReadableTypename<T>::name;
+    name << "_sg" << sg_size;
     return name.str();
   }
 };
 
+template<unsigned int sparsity, size_t sg_size>
+void run_helper(BenchmarkApp& app) {
+  if (app.deviceSupportsSG(sg_size)) {
+    app.run<SpGEMM<int, sparsity, sg_size>>();
+    app.run<SpGEMM<long long, sparsity, sg_size>>();
+    app.run<SpGEMM<float, sparsity, sg_size>>();
+    if (app.deviceSupportsFP64()) {
+      app.run<SpGEMM<double, sparsity, sg_size>>();
+    }
+  }
+}
 
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
 
-  if (app.deviceSupportsSG(8)) {
-    app.run<SpGEMM<int, 8>>();
-    app.run<SpGEMM<long long, 8>>();
-    app.run<SpGEMM<float, 8>>();
-    if (app.deviceSupportsFP64()) {
-      app.run<SpGEMM<double, 8>>();
-    }
-  }
-
-  if (app.deviceSupportsSG(16)) {
-    app.run<SpGEMM<int, 16>>();
-    app.run<SpGEMM<long long, 16>>();
-    app.run<SpGEMM<float, 16>>();
-    if (app.deviceSupportsFP64()) {
-      app.run<SpGEMM<double, 16>>();
-    }
-  }
-
-  if (app.deviceSupportsSG(32)) {
-    app.run<SpGEMM<int, 32>>();
-    app.run<SpGEMM<long long, 32>>();
-    app.run<SpGEMM<float, 32>>();
-    if (app.deviceSupportsFP64()) {
-      app.run<SpGEMM<double, 32>>();
-    }
-  }
+  run_helper<25, 8>(app);
+  run_helper<25, 16>(app);
+  run_helper<25, 32>(app);
+  run_helper<50, 8>(app);
+  run_helper<50, 16>(app);
+  run_helper<50, 32>(app);
+  run_helper<75, 8>(app);
+  run_helper<75, 16>(app);
+  run_helper<75, 32>(app);
   
   return 0;
 }
