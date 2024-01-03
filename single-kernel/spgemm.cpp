@@ -19,10 +19,24 @@ struct CSRMatrix {
 };
 
 template<typename T>
+struct CSCMatrix {
+  std::vector<T> values;
+  std::vector<int> row_indices;
+  std::vector<int> column_pointers;
+};
+
+template<typename T>
 struct SYCL_CSRMatrix {
   PrefetchedBuffer<T, 1> values;
   PrefetchedBuffer<int, 1> column_indices;
   PrefetchedBuffer<int, 1> row_pointers;
+};
+
+template<typename T>
+struct SYCL_CSCMatrix {
+  PrefetchedBuffer<T, 1> values;
+  PrefetchedBuffer<int, 1> row_indices;
+  PrefetchedBuffer<int, 1> column_pointers;
 };
 
 template<typename T>
@@ -45,17 +59,37 @@ void createRandomSparseCSR(size_t numRows, size_t numCols, float sparsity, CSRMa
   }
 }
 
+template<typename T>
+void createRandomSparseCSC(size_t numRows, size_t numCols, float sparsity, CSCMatrix<T>& csc) {
+  csc.values.clear();
+  csc.row_indices.clear();
+  csc.column_pointers.assign(numCols + 1, 0);
+
+  int nnz = 0;
+
+  for (int j = 0; j < numCols; j++) {
+    for (int i = 0; i < numRows; ++i) {
+      if (rand() / (RAND_MAX + 1.0) > sparsity) {
+        csc.values.push_back(1);
+        csc.row_indices.push_back(i);
+        nnz++;
+      }
+    }
+    csc.column_pointers[j + 1] = nnz;
+  }
+}
+
 template <class T, unsigned int sparsity, size_t sg_size>
 class SpGEMM {
 protected:
   size_t num_iters;
 
   CSRMatrix<T> csrA;
-  CSRMatrix<T> csrB;
+  CSCMatrix<T> cscB;
   std::vector<T> c;
 
   SYCL_CSRMatrix<T> sycl_csrA;
-  SYCL_CSRMatrix<T> sycl_csrB;
+  SYCL_CSCMatrix<T> sycl_cscB;
   PrefetchedBuffer<T, 1> c_buf;
 
   size_t size;
@@ -72,61 +106,55 @@ public:
     srand(seed);
 
     createRandomSparseCSR(size, size, sparsity / 100.0f, csrA);
-    createRandomSparseCSR(size, size, sparsity / 100.0f, csrB);
+    createRandomSparseCSC(size, size, sparsity / 100.0f, cscB);
     c.resize(size * size);
 
     sycl_csrA.values.initialize(args.device_queue, csrA.values.data(), s::range{csrA.values.size()});
     sycl_csrA.column_indices.initialize(args.device_queue, csrA.column_indices.data(), s::range{csrA.column_indices.size()});
     sycl_csrA.row_pointers.initialize(args.device_queue, csrA.row_pointers.data(), s::range{csrA.row_pointers.size()});
 
-    sycl_csrB.values.initialize(args.device_queue, csrB.values.data(), s::range{csrB.values.size()});
-    sycl_csrB.column_indices.initialize(args.device_queue, csrB.column_indices.data(), s::range{csrB.column_indices.size()});
-    sycl_csrB.row_pointers.initialize(args.device_queue, csrB.row_pointers.data(), s::range{csrB.row_pointers.size()});
+    sycl_cscB.values.initialize(args.device_queue, cscB.values.data(), s::range{cscB.values.size()});
+    sycl_cscB.column_indices.initialize(args.device_queue, cscB.column_indices.data(), s::range{cscB.column_indices.size()});
+    sycl_cscB.row_pointers.initialize(args.device_queue, cscB.row_pointers.data(), s::range{cscB.row_pointers.size()});
 
     c_buf.initialize(args.device_queue, c.data(), s::range{c.size()});
   }
 
   void run(std::vector<s::event>& events) {
     events.push_back(args.device_queue.submit([&](s::handler& cgh) {
-      auto valuesA = sycl_csrA.values.template get_access<s::access_mode::read>(cgh);
-      auto col_indicesA = sycl_csrA.column_indices.template get_access<s::access_mode::read>(cgh);
-      auto row_pointersA = sycl_csrA.row_pointers.template get_access<s::access_mode::read>(cgh);
+      auto csr_values = sycl_csrA.values.template get_access<s::access_mode::read>(cgh);
+      auto csr_column_indices = sycl_csrA.column_indices.template get_access<s::access_mode::read>(cgh);
+      auto csr_row_pointers = sycl_csrA.row_pointers.template get_access<s::access_mode::read>(cgh);
 
-      auto valuesB = sycl_csrB.values.template get_access<s::access_mode::read>(cgh);
-      auto col_indicesB = sycl_csrB.column_indices.template get_access<s::access_mode::read>(cgh);
-      auto row_pointersB = sycl_csrB.row_pointers.template get_access<s::access_mode::read>(cgh);
+      auto csc_values = sycl_cscB.values.template get_access<s::access_mode::read>(cgh);
+      auto csc_column_pointers = sycl_cscB.column_pointerstemplate get_access<s::access_mode::read>(cgh);
+      auto csc_row_indices = sycl_cscB.row_pointers.template get_access<s::access_mode::read>(cgh);
 
       auto valuesC = c_buf.template get_access<s::access_mode::discard_write>(cgh);
 
       cgh.parallel_for<SpGEMMKernel<T, sparsity, sg_size>>(sycl::range<2>({size, size}), [=](sycl::item<2> item) [[intel::reqd_sub_group_size(sg_size)]] {
-        int row = item.get_id(0);
-        int col = item.get_id(1);
+        int rowC = item.get_id(0);
+        int colC = item.get_id(1);
 
         T sum = 0;
 
-        int row_startA = row_pointersA[row];
-        int row_endA = row_pointersA[row + 1];
+        for (int k = 0; k < size; ++k) {
+          int rowA = csc_row_indices[k];
 
-        for (int k = row_startA; k < row_endA; ++k) {
-          int colA = col_indicesA[k];
-          T valA = valuesA[k];
+          if (rowC == rowA) {
+            int colB = csc_column_pointers[k];
+            int colBEnd = csc_column_pointers[k + 1];
 
-          // Find the corresponding row in B
-          int row_startB = row_pointersB[colA];
-          int row_endB = row_pointersB[colA + 1];
-
-          for (int l = row_startB; l < row_endB; ++l) {
-            int colB = col_indicesB[l];
-            T valB = valuesB[l];
-
-            if (colB == col) {
+            for (int j = colB; j < colBEnd; ++j) {
+              int colA = csr_column_indices[j];
+              T valA = csr_values[j];
+              T valB = csc_values[k];
               sum += valA * valB;
-              break; // No need to continue searching in the same column
             }
           }
         }
 
-        valuesC[item.get_linear_id()] = sum;
+        result_matrix[item.get_linear_id()] = sum;
       });
     }));
   }
@@ -141,24 +169,18 @@ public:
       for (int col = 0; col < size; col++) {
         T sum = 0;
 
-        int row_startA = csrA.row_pointers[row];
-        int row_endA = csrA.row_pointers[row + 1];
+        for (int k = 0; k < size; ++k) {
+          int rowA = cscB.row_indices[k];
 
-        for (int k = row_startA; k < row_endA; ++k) {
-          int colA = csrA.column_indices[k];
-          T valA = csrA.values[k];
+          if (row == rowA) {
+            int colB = cscB.column_pointers[k];
+            int colBEnd = cscB.column_pointers[k + 1];
 
-          // Find the corresponding row in B
-          int row_startB = csrB.row_pointers[colA];
-          int row_endB = csrB.row_pointers[colA + 1];
-
-          for (int l = row_startB; l < row_endB; ++l) {
-            int colB = csrB.column_indices[l];
-            T valB = csrB.values[l];
-
-            if (colB == col) {
+            for (int j = colB; j < colBEnd; ++j) {
+              int colA = csrA.column_indices[j];
+              T valA = csrA.values[j];
+              T valB = cscB.values[k];
               sum += valA * valB;
-              break; // No need to continue searching in the same column
             }
           }
         }
