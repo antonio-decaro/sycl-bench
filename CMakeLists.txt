@@ -129,6 +129,8 @@ set(benchmarks
 
   # compiletime/compiletime.cpp
   spec_constants/spec_constant_convolution.cpp
+
+  single-kernel/spgemm.cpp
 )
 
 # Setting variables
