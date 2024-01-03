@@ -2,7 +2,6 @@
 #include <random>
 #include <vector>
 #include <sycl/sycl.hpp>
-#include <oneapi/mkl/spblas.hpp>
 
 #include "common.h"
 
@@ -46,23 +45,23 @@ void createRandomSparseCSR(size_t numRows, size_t numCols, float sparsity, CSRMa
 }
 
 template <class T, unsigned int sparsity, size_t sg_size>
-class SpGEMM {
+class SpMM {
 protected:
   size_t num_iters;
 
   CSRMatrix<T> csrA;
-  CSRMatrix<T> csrB;
+  std::vector<T> b;
   std::vector<T> c;
 
   SYCL_CSRMatrix<T> sycl_csrA;
-  SYCL_CSRMatrix<T> sycl_csrB;
+  PrefetchedBuffer<T, 1> b_buf;
   PrefetchedBuffer<T, 1> c_buf;
 
   size_t size;
   BenchmarkArgs args;
 
 public:
-  SpGEMM(BenchmarkArgs& _args) : args(_args) {}
+  SpMM(BenchmarkArgs& _args) : args(_args) {}
 
   void setup() {
     size = args.problem_size; // input size defined by the user
@@ -72,17 +71,16 @@ public:
     srand(seed);
 
     createRandomSparseCSR(size, size, sparsity / 100.0f, csrA);
-    createRandomSparseCSR(size, size, sparsity / 100.0f, csrB);
+
+    b.resize(size * size);
+    std::fill(b.begin(), b.end(), 1);
     c.resize(size * size);
 
     sycl_csrA.values.initialize(args.device_queue, csrA.values.data(), s::range{csrA.values.size()});
     sycl_csrA.column_indices.initialize(args.device_queue, csrA.column_indices.data(), s::range{csrA.column_indices.size()});
     sycl_csrA.row_pointers.initialize(args.device_queue, csrA.row_pointers.data(), s::range{csrA.row_pointers.size()});
 
-    sycl_csrB.values.initialize(args.device_queue, csrB.values.data(), s::range{csrB.values.size()});
-    sycl_csrB.column_indices.initialize(args.device_queue, csrB.column_indices.data(), s::range{csrB.column_indices.size()});
-    sycl_csrB.row_pointers.initialize(args.device_queue, csrB.row_pointers.data(), s::range{csrB.row_pointers.size()});
-
+    b_buf.initialize(args.device_queue, b.data(), s::range{b.size()});
     c_buf.initialize(args.device_queue, c.data(), s::range{c.size()});
   }
 
@@ -92,41 +90,22 @@ public:
       auto col_indicesA = sycl_csrA.column_indices.template get_access<s::access_mode::read>(cgh);
       auto row_pointersA = sycl_csrA.row_pointers.template get_access<s::access_mode::read>(cgh);
 
-      auto valuesB = sycl_csrB.values.template get_access<s::access_mode::read>(cgh);
-      auto col_indicesB = sycl_csrB.column_indices.template get_access<s::access_mode::read>(cgh);
-      auto row_pointersB = sycl_csrB.row_pointers.template get_access<s::access_mode::read>(cgh);
-
+      auto valuesB = b_buf.template get_access<s::access_mode::read>(cgh);
       auto valuesC = c_buf.template get_access<s::access_mode::discard_write>(cgh);
 
       cgh.parallel_for<SpGEMMKernel<T, sparsity, sg_size>>(sycl::range<2>({size, size}), [=](sycl::item<2> item) [[intel::reqd_sub_group_size(sg_size)]] {
-        int row = item.get_id(0);
-        int col = item.get_id(1);
-
+        int rowA = item.get_id(0);
+        int linear_id = item.get_linear_id();
         T sum = 0;
 
-        int row_startA = row_pointersA[row];
-        int row_endA = row_pointersA[row + 1];
-
-        for (int k = row_startA; k < row_endA; ++k) {
+        for (int k = row_pointersA[rowA]; k < row_pointersA[rowA + 1]; ++k) {
           int colA = col_indicesA[k];
           T valA = valuesA[k];
-
-          // Find the corresponding row in B
-          int row_startB = row_pointersB[colA];
-          int row_endB = row_pointersB[colA + 1];
-
-          for (int l = row_startB; l < row_endB; ++l) {
-            int colB = col_indicesB[l];
-            T valB = valuesB[l];
-
-            if (colB == col) {
-              sum += valA * valB;
-              break; // No need to continue searching in the same column
-            }
-          }
+          T valB = valuesB[linear_id];
+          sum += valA * valB;
         }
 
-        valuesC[item.get_linear_id()] = sum;
+        valuesC[linear_id] = sum;
       });
     }));
   }
@@ -147,20 +126,8 @@ public:
         for (int k = row_startA; k < row_endA; ++k) {
           int colA = csrA.column_indices[k];
           T valA = csrA.values[k];
-
-          // Find the corresponding row in B
-          int row_startB = csrB.row_pointers[colA];
-          int row_endB = csrB.row_pointers[colA + 1];
-
-          for (int l = row_startB; l < row_endB; ++l) {
-            int colB = csrB.column_indices[l];
-            T valB = csrB.values[l];
-
-            if (colB == col) {
-              sum += valA * valB;
-              break; // No need to continue searching in the same column
-            }
-          }
+          T valB = b[colA * size + col];
+          sum += valA * valB;
         }
 
         if (c[row * size + col] != sum) {
@@ -174,7 +141,7 @@ public:
 
   static std::string getBenchmarkName() { 
     std::stringstream name;
-    name << "SpGEMM";
+    name << "SpMM";
     name << "_sp" << sparsity;
     name << "_" << ReadableTypename<T>::name;
     name << "_sg" << sg_size;
@@ -185,11 +152,11 @@ public:
 template<unsigned int sparsity, size_t sg_size>
 void run_helper(BenchmarkApp& app) {
   if (app.deviceSupportsSG(sg_size)) {
-    app.run<SpGEMM<int, sparsity, sg_size>>();
-    app.run<SpGEMM<long long, sparsity, sg_size>>();
-    app.run<SpGEMM<float, sparsity, sg_size>>();
+    app.run<SpMM<int, sparsity, sg_size>>();
+    app.run<SpMM<long long, sparsity, sg_size>>();
+    app.run<SpMM<float, sparsity, sg_size>>();
     if (app.deviceSupportsFP64()) {
-      app.run<SpGEMM<double, sparsity, sg_size>>();
+      app.run<SpMM<double, sparsity, sg_size>>();
     }
   }
 }

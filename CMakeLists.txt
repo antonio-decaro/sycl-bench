@@ -131,6 +131,7 @@ set(benchmarks
   spec_constants/spec_constant_convolution.cpp
 
   single-kernel/spgemm.cpp
+  single-kernel/spmm.cpp
 )
 
 # Setting variables
