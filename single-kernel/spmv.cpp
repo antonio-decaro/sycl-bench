@@ -8,7 +8,7 @@
 namespace s = sycl;
 
 template<typename T,  unsigned int sparsity, size_t sg_size>
-class SpGEMMKernel; // kernel forward declaration
+class SpMVKernel; // kernel forward declaration
 
 template<typename T>
 struct CSRMatrix {
@@ -45,7 +45,7 @@ void createRandomSparseCSR(size_t numRows, size_t numCols, float sparsity, CSRMa
 }
 
 template <class T, unsigned int sparsity, size_t sg_size>
-class SpMM {
+class SpMV {
 protected:
   size_t num_iters;
 
@@ -61,7 +61,7 @@ protected:
   BenchmarkArgs args;
 
 public:
-  SpMM(BenchmarkArgs& _args) : args(_args) {}
+  SpMV(BenchmarkArgs& _args) : args(_args) {}
 
   void setup() {
     size = args.problem_size; // input size defined by the user
@@ -72,9 +72,9 @@ public:
 
     createRandomSparseCSR(size, size, sparsity / 100.0f, csrA);
 
-    b.resize(size * size);
+    b.resize(size);
     std::fill(b.begin(), b.end(), 1);
-    c.resize(size * size);
+    c.resize(size);
 
     sycl_csrA.values.initialize(args.device_queue, csrA.values.data(), s::range{csrA.values.size()});
     sycl_csrA.column_indices.initialize(args.device_queue, csrA.column_indices.data(), s::range{csrA.column_indices.size()});
@@ -87,26 +87,20 @@ public:
   void run(std::vector<s::event>& events) {
     events.push_back(args.device_queue.submit([&](s::handler& cgh) {
       auto valuesA = sycl_csrA.values.template get_access<s::access_mode::read>(cgh);
-      auto col_indicesA = sycl_csrA.column_indices.template get_access<s::access_mode::read>(cgh);
-      auto row_pointersA = sycl_csrA.row_pointers.template get_access<s::access_mode::read>(cgh);
+      auto col_indices = sycl_csrA.column_indices.template get_access<s::access_mode::read>(cgh);
+      auto row_pointers = sycl_csrA.row_pointers.template get_access<s::access_mode::read>(cgh);
 
       auto valuesB = b_buf.template get_access<s::access_mode::read>(cgh);
       auto valuesC = c_buf.template get_access<s::access_mode::discard_write>(cgh);
 
-      cgh.parallel_for<SpGEMMKernel<T, sparsity, sg_size>>(sycl::range<2>({size, size}), [=, size=size](sycl::item<2> item) [[intel::reqd_sub_group_size(sg_size)]] {
-        int rowA = item.get_id(0);
-        int colB = item.get_id(1);
-        int linear_id = item.get_linear_id();
-
-        T sum = 0;
-        for (int k = row_pointersA[rowA]; k < row_pointersA[rowA + 1]; ++k) {
-          int colA = col_indicesA[k];
-          T valA = valuesA[k];
-          T valB = valuesB[colA * size + colB];
-          sum += valA * valB;
+      cgh.parallel_for<SpMVKernel<T, sparsity, sg_size>>(sycl::range<1>(size), [=, size=size](sycl::item<1> item) [[intel::reqd_sub_group_size(sg_size)]] {
+        int row = item[0];
+        T dot_product = 0;
+        for (int j = row_pointers[row]; j < row_pointers[row + 1]; j++) {
+          int col = col_indices[j];
+          dot_product += valuesA[col] * valuesB[col];
         }
-
-        valuesC[linear_id] = sum;
+        valuesC[row] = dot_product;
       });
     }));
   }
@@ -118,22 +112,13 @@ public:
       return true;
     }
     for (int row = 0; row < size; row++) {
-      for (int col = 0; col < size; col++) {
-        T sum = 0;
-
-        int row_startA = csrA.row_pointers[row];
-        int row_endA = csrA.row_pointers[row + 1];
-
-        for (int k = row_startA; k < row_endA; ++k) {
-          int colA = csrA.column_indices[k];
-          T valA = csrA.values[k];
-          T valB = b[colA * size + col];
-          sum += valA * valB;
-        }
-
-        if (c[row * size + col] != sum) {
-          return false;
-        }
+      T dot_product = 0;
+      for (int j = csrA.row_pointers[row]; j < csrA.row_pointers[row + 1]; j++) {
+        int col = csrA.column_indices[j];
+        dot_product += csrA.values[col] * b[col];
+      }
+      if (c[row] != dot_product) {
+        return false;
       }
     }
 
@@ -142,7 +127,7 @@ public:
 
   static std::string getBenchmarkName() { 
     std::stringstream name;
-    name << "SpMM";
+    name << "SpMV";
     name << "_sp" << sparsity;
     name << "_" << ReadableTypename<T>::name;
     name << "_sg" << sg_size;
@@ -153,9 +138,9 @@ public:
 template<unsigned int sparsity, size_t sg_size>
 void run_helper(BenchmarkApp& app) {
   if (app.deviceSupportsSG(sg_size)) {
-    app.run<SpMM<float, sparsity, sg_size>>();
+    app.run<SpMV<float, sparsity, sg_size>>();
     if (app.deviceSupportsFP64()) {
-      app.run<SpMM<double, sparsity, sg_size>>();
+      app.run<SpMV<double, sparsity, sg_size>>();
     }
   }
 }
