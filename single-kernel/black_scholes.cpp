@@ -263,7 +263,7 @@ public:
 
   static std::string getBenchmarkName() { 
     std::stringstream name;
-    name << "BlackScholes_";
+    name << "BlackScholes_sg";
     name << sg_size;
     return name.str();
   }
