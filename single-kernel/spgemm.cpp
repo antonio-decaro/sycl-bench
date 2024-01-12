@@ -138,18 +138,23 @@ public:
 
         T sum = 0;
 
-        for (int k = 0; k < size; ++k) {
-          int rowA = csc_row_indices[k];
+        auto rowAStart = csr_row_pointers[rowC];
+        auto rowAEnd = csr_row_pointers[rowC + 1];
 
-          if (rowC == rowA) {
-            int colB = csc_column_pointers[k];
-            int colBEnd = csc_column_pointers[k + 1];
+        auto colBStart = csc_column_pointers[colC];
+        auto colBEnd = csc_column_pointers[colC + 1];
 
-            for (int j = colB; j < colBEnd; ++j) {
-              int colA = csr_column_indices[j];
-              T valA = csr_values[j];
-              T valB = csc_values[k];
+        for (int i = rowAStart; i < rowAEnd; ++i) {
+          int colA = csr_column_indices[i];
+          T valA = csr_values[i];
+
+          for (int j = colBStart; j < colBEnd; ++j) {
+            int rowB = csc_row_indices[j];
+            T valB = csc_values[j];
+
+            if (colA == rowB) {
               sum += valA * valB;
+              break;
             }
           }
         }
@@ -165,27 +170,31 @@ public:
     if (!ver.enabled) {
       return true;
     }
-    for (int row = 0; row < size; row++) {
-      for (int col = 0; col < size; col++) {
+    // Perform multiplication
+    for (int i = 0; i < size; ++i) {
+      for (int j = 0; j < size; j++) {
         T sum = 0;
+        auto rowAStart = csrA.row_pointers[i];
+        auto rowAEnd = csrA.row_pointers[i + 1];
 
-        for (int k = 0; k < size; ++k) {
-          int rowA = cscB.row_indices[k];
+        auto colBStart = cscB.column_pointers[j];
+        auto colBEnd = cscB.column_pointers[j + 1];
 
-          if (row == rowA) {
-            int colB = cscB.column_pointers[k];
-            int colBEnd = cscB.column_pointers[k + 1];
+        for (int k = rowAStart; k < rowAEnd; ++k) {
+          int colA = csrA.column_indices[k];
+          T valA = csrA.values[k];
 
-            for (int j = colB; j < colBEnd; ++j) {
-              int colA = csrA.column_indices[j];
-              T valA = csrA.values[j];
-              T valB = cscB.values[k];
+          for (int l = colBStart; l < colBEnd; ++l) {
+            int rowB = cscB.row_indices[l];
+            T valB = cscB.values[l];
+
+            if (colA == rowB) {
               sum += valA * valB;
+              break;
             }
           }
         }
-
-        if (c[row * size + col] != sum) {
+        if (sum != c[i * size + j]) {
           return false;
         }
       }
@@ -197,7 +206,6 @@ public:
   static std::string getBenchmarkName() { 
     std::stringstream name;
     name << "SpGEMM";
-    name << "_sp" << sparsity;
     name << "_" << ReadableTypename<T>::name;
     name << "_sg" << sg_size;
     return name.str();
@@ -207,6 +215,8 @@ public:
 template<unsigned int sparsity, size_t sg_size>
 void run_helper(BenchmarkApp& app) {
   if (app.deviceSupportsSG(sg_size)) {
+    app.run<SpGEMM<int, sparsity, sg_size>>();
+    app.run<SpGEMM<long long, sparsity, sg_size>>();
     app.run<SpGEMM<float, sparsity, sg_size>>();
     if (app.deviceSupportsFP64()) {
       app.run<SpGEMM<double, sparsity, sg_size>>();
@@ -217,15 +227,9 @@ void run_helper(BenchmarkApp& app) {
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
 
-  run_helper<20, 8>(app);
-  run_helper<20, 16>(app);
-  run_helper<20, 32>(app);
-  run_helper<50, 8>(app);
-  run_helper<50, 16>(app);
-  run_helper<50, 32>(app);
-  run_helper<80, 8>(app);
-  run_helper<80, 16>(app);
-  run_helper<80, 32>(app);
+  run_helper<75, 8>(app);
+  run_helper<75, 16>(app);
+  run_helper<75, 32>(app);
   
   return 0;
 }
