@@ -128,6 +128,7 @@ public:
   static std::string getBenchmarkName() { 
     std::stringstream name;
     name << "SpMV";
+    name << "_" << ReadableTypename<T>::name;
     name << "_sg" << sg_size;
     return name.str();
   }
