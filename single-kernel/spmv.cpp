@@ -128,8 +128,6 @@ public:
   static std::string getBenchmarkName() { 
     std::stringstream name;
     name << "SpMV";
-    name << "_sp" << sparsity;
-    name << "_" << ReadableTypename<T>::name;
     name << "_sg" << sg_size;
     return name.str();
   }
@@ -138,6 +136,8 @@ public:
 template<unsigned int sparsity, size_t sg_size>
 void run_helper(BenchmarkApp& app) {
   if (app.deviceSupportsSG(sg_size)) {
+    app.run<SpMV<int, sparsity, sg_size>>();
+    app.run<SpMV<long long, sparsity, sg_size>>();
     app.run<SpMV<float, sparsity, sg_size>>();
     if (app.deviceSupportsFP64()) {
       app.run<SpMV<double, sparsity, sg_size>>();
@@ -148,15 +148,9 @@ void run_helper(BenchmarkApp& app) {
 int main(int argc, char** argv) {
   BenchmarkApp app(argc, argv);
 
-  run_helper<20, 8>(app);
-  run_helper<20, 16>(app);
-  run_helper<20, 32>(app);
-  run_helper<50, 8>(app);
-  run_helper<50, 16>(app);
-  run_helper<50, 32>(app);
-  run_helper<80, 8>(app);
-  run_helper<80, 16>(app);
-  run_helper<80, 32>(app);
+  run_helper<70, 8>(app);
+  run_helper<70, 16>(app);
+  run_helper<70, 32>(app);
   
   return 0;
 }
