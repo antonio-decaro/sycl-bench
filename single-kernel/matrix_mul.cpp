@@ -46,7 +46,7 @@ public:
       auto in_A = a_buf.template get_access<s::access_mode::read>(cgh);
       auto in_B = b_buf.template get_access<s::access_mode::read>(cgh);
       auto out = c_buf.template get_access<s::access_mode::read_write>(cgh);
-      cgh.parallel_for(s::nd_range<2>{{size, size}, {local_size, 1}}, [=, num_iters=args.num_iters, size=this->size](s::nd_item<2> gid) [[intel::reqd_sub_group_size(sg_size)]] {
+      cgh.parallel_for(s::nd_range<2>{{size, size}, {1, local_size}}, [=, num_iters=args.num_iters, size=this->size](s::nd_item<2> gid) [[intel::reqd_sub_group_size(sg_size)]] {
         int gidx = gid.get_global_id(0);
         int gidy = gid.get_global_id(1);
         for(int iter = 0; iter < num_iters; iter++) {

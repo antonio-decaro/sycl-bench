@@ -133,7 +133,7 @@ public:
 
       auto valuesC = c_buf.template get_access<s::access_mode::discard_write>(cgh);
 
-      sycl::nd_range<2> ndrange {sycl::range<2>{size, size}, sycl::range<2>{local_size, 1}};
+      sycl::nd_range<2> ndrange {sycl::range<2>{size, size}, sycl::range<2>{1, local_size}};
 
       cgh.parallel_for<SpGEMMKernel<T, sparsity, sg_size>>(ndrange, [=, size=size](sycl::nd_item<2> item) [[intel::reqd_sub_group_size(sg_size)]] {
         int rowC = item.get_global_id(0);

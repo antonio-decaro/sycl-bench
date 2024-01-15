@@ -54,7 +54,7 @@ public:
     events.push_back(args.device_queue.submit([&](sycl::handler& cgh) {
       auto in = input_buf.get_access<s::access::mode::read>(cgh);
       auto out = output_buf.get_access<s::access::mode::discard_write>(cgh);
-      sycl::nd_range<2> ndrange{{size, size}, {local_size, 1}};
+      sycl::nd_range<2> ndrange{{size, size}, {1, local_size}};
 
       cgh.parallel_for<class MedianFilterBenchKernel<sg_size>>(ndrange, [in, out, size_ = size](sycl::nd_item<2> item) [[intel::reqd_sub_group_size(sg_size)]] {
         int x = item.get_global_id(0);
