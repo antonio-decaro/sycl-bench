@@ -114,7 +114,7 @@ public:
         swap(window, 3, 5);
         swap(window, 3, 4);
 
-        out[gid] = window[4];
+        out[x][y] = window[4];
       });
     }));
 

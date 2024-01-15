@@ -90,7 +90,7 @@ public:
         sycl::float4 color = hypot(Gx, Gy);
         sycl::float4 minval = sycl::float4(0.0, 0.0, 0.0, 0.0);
         sycl::float4 maxval = sycl::float4(1.0, 1.0, 1.0, 1.0);
-        out[gid] = clamp(color, minval, maxval);
+        out[x][y] = clamp(color, minval, maxval);
       });
     }));
   }
