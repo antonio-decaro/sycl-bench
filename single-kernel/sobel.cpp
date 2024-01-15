@@ -41,10 +41,11 @@ public:
   }
 
   void run(std::vector<sycl::event>& events) {
+    const size_t local_size = args.local_size;
     events.push_back(args.device_queue.submit([&](sycl::handler& cgh) {
       auto in = input_buf.get_access<s::access::mode::read>(cgh);
       auto out = output_buf.get_access<s::access::mode::discard_write>(cgh);
-      sycl::range<2> ndrange{size, size};
+      sycl::nd_range<2> ndrange{{size, size}, {local_size, local_size}};
 
       // Sobel kernel 3x3
       const float kernel[] = {1, 0, -1, 2, 0, -2, 1, 0, -1};

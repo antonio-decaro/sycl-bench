@@ -85,6 +85,7 @@ public:
   }
 
   void run(std::vector<s::event>& events) {
+    const size_t local_size = args.local_size;
     events.push_back(args.device_queue.submit([&](s::handler& cgh) {
       auto valuesA = sycl_csrA.values.template get_access<s::access_mode::read>(cgh);
       auto col_indices = sycl_csrA.column_indices.template get_access<s::access_mode::read>(cgh);
@@ -93,8 +94,8 @@ public:
       auto valuesB = b_buf.template get_access<s::access_mode::read>(cgh);
       auto valuesC = c_buf.template get_access<s::access_mode::discard_write>(cgh);
 
-      cgh.parallel_for<SpMVKernel<T, sparsity, sg_size>>(sycl::range<1>(size), [=, size=size](sycl::item<1> item) [[intel::reqd_sub_group_size(sg_size)]] {
-        int row = item[0];
+      cgh.parallel_for<SpMVKernel<T, sparsity, sg_size>>(sycl::nd_range<1>({size}, {local_size}), [=, size=size](sycl::nd_item<1> item) [[intel::reqd_sub_group_size(sg_size)]] {
+        int row = item.get_global_id(0);
         T dot_product = 0;
         for (int j = row_pointers[row]; j < row_pointers[row + 1]; j++) {
           int col = col_indices[j];

@@ -74,6 +74,7 @@ public:
   }
 
   void run(std::vector<s::event>& events) {
+    const size_t local_size = args.local_size;
     events.push_back(args.device_queue.submit([&](s::handler& cgh) {
       auto ma_acc = buf_ma.get_access<s::access::mode::read>(cgh);
       auto b_acc = buf_b.get_access<s::access::mode::read>(cgh);
@@ -81,10 +82,10 @@ public:
       auto seed_acc = buf_seed.get_access<s::access::mode::read>(cgh);
       auto result_acc = buf_result.get_access<s::access::mode::write>(cgh);
 
-      s::range<1> ndrange{size};
+      s::nd_range<1> ndrange{{size}, {local_size}};
 
-      cgh.parallel_for<class MerseTwisterKernel<sg_size>>(ndrange, [=, length = size, num_iters = num_iters](s::id<1> id) [[intel::reqd_sub_group_size(sg_size)]] {
-        int gid = id[0];
+      cgh.parallel_for<class MerseTwisterKernel<sg_size>>(ndrange, [=, length = size, num_iters = num_iters](s::nd_item<1> id) [[intel::reqd_sub_group_size(sg_size)]] {
+        int gid = id.get_global_id(0);
 
         if(gid >= length)
           return;

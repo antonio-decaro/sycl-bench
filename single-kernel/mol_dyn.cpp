@@ -52,17 +52,19 @@ public:
   }
 
   void run(std::vector<sycl::event>& events) {
+    const size_t global_size = args.problem_size;
+    const size_t local_size = args.local_size;
     events.push_back(args.device_queue.submit([&](sycl::handler& cgh) {
       auto in = input_buf.get_access<s::access::mode::read>(cgh);
       auto neigh = neighbour_buf.get_access<s::access::mode::read>(cgh);
       auto out = output_buf.get_access<s::access::mode::discard_write>(cgh);
 
-      sycl::range<1> ndrange(args.problem_size);
+      sycl::nd_range<1> ndrange({global_size}, {local_size});
 
       cgh.parallel_for<class MolecularDynamicsKernel<sg_size>>(
           ndrange, [=, problem_size = args.problem_size, neighCount_ = neighCount, inum_ = inum, cutsq_ = cutsq,
-                       lj1_ = lj1, lj2_ = lj2](sycl::id<1> idx) [[intel::reqd_sub_group_size(sg_size)]] {
-            size_t gid = idx[0];
+                       lj1_ = lj1, lj2_ = lj2](sycl::nd_item<1> idx) [[intel::reqd_sub_group_size(sg_size)]] {
+            size_t gid = idx.get_global_id(0);
 
             if(gid < problem_size) {
               s::float4 ipos = in[gid];

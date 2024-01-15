@@ -41,13 +41,14 @@ public:
   }
 
   void run(std::vector<sycl::event>& events) {
+    const size_t local_size = args.local_size;
     events.push_back(args.device_queue.submit([&](s::handler& cgh) {
       auto in_A = a_buf.template get_access<s::access_mode::read>(cgh);
       auto in_B = b_buf.template get_access<s::access_mode::read>(cgh);
       auto out = c_buf.template get_access<s::access_mode::read_write>(cgh);
-      cgh.parallel_for(s::range<2>{size, size}, [=, num_iters=args.num_iters, size=this->size](s::id<2> gid) [[intel::reqd_sub_group_size(sg_size)]] {
-        int gidx = gid.get(0);
-        int gidy = gid.get(1);
+      cgh.parallel_for(s::nd_range<2>{{size, size}, {local_size, local_size}}, [=, num_iters=args.num_iters, size=this->size](s::nd_item<2> gid) [[intel::reqd_sub_group_size(sg_size)]] {
+        int gidx = gid.get_global_id(0);
+        int gidy = gid.get_global_id(1);
         for(int iter = 0; iter < num_iters; iter++) {
           out[gidx * size + gidy] = 0;
           for(int k = 0; k < size; k++) {

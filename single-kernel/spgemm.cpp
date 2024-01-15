@@ -121,6 +121,7 @@ public:
   }
 
   void run(std::vector<s::event>& events) {
+    const size_t local_size = args.local_size;
     events.push_back(args.device_queue.submit([&](s::handler& cgh) {
       auto csr_values = sycl_csrA.values.template get_access<s::access_mode::read>(cgh);
       auto csr_column_indices = sycl_csrA.column_indices.template get_access<s::access_mode::read>(cgh);
@@ -132,9 +133,11 @@ public:
 
       auto valuesC = c_buf.template get_access<s::access_mode::discard_write>(cgh);
 
-      cgh.parallel_for<SpGEMMKernel<T, sparsity, sg_size>>(sycl::range<2>({size, size}), [=, size=size](sycl::item<2> item) [[intel::reqd_sub_group_size(sg_size)]] {
-        int rowC = item.get_id(0);
-        int colC = item.get_id(1);
+      sycl::nd_range<2> ndrange {sycl::range<2>{size, size}, sycl::range<2>{local_size, local_size}};
+
+      cgh.parallel_for<SpGEMMKernel<T, sparsity, sg_size>>(ndrange, [=, size=size](sycl::nd_item<2> item) [[intel::reqd_sub_group_size(sg_size)]] {
+        int rowC = item.get_global_id(0);
+        int colC = item.get_global_id(1);
 
         T sum = 0;
 
@@ -159,7 +162,7 @@ public:
           }
         }
 
-        valuesC[item.get_linear_id()] = sum;
+        valuesC[item.get_global_linear_id()] = sum;
       });
     }));
   }

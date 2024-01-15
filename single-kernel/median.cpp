@@ -50,10 +50,11 @@ public:
   }
 
   void run(std::vector<sycl::event>& events) {
+    const size_t local_size = args.local_size;
     events.push_back(args.device_queue.submit([&](sycl::handler& cgh) {
       auto in = input_buf.get_access<s::access::mode::read>(cgh);
       auto out = output_buf.get_access<s::access::mode::discard_write>(cgh);
-      sycl::range<2> ndrange{size, size};
+      sycl::nd_range<2> ndrange{{size, size}, {local_size, local_size}};
 
       cgh.parallel_for<class MedianFilterBenchKernel<sg_size>>(ndrange, [in, out, size_ = size](sycl::id<2> gid) [[intel::reqd_sub_group_size(sg_size)]] {
         int x = gid[0];

@@ -154,6 +154,7 @@ public:
   }
 
   void run(std::vector<s::event>& events) {
+    const size_t local_size = args.local_size;
     events.push_back(args.device_queue.submit([&](s::handler& cgh) {
       auto dm_cpflag = cpflag_buf.get_access<s::access::mode::read>(cgh);
       auto dm_S0 = S0_buf.get_access<s::access::mode::read>(cgh);
@@ -164,11 +165,11 @@ public:
       auto dm_answer = answer_buf.get_access<s::access::mode::read_write>(cgh);
 
 
-      s::range<1> ndrange{size};
+      s::nd_range<1> ndrange{{size}, {local_size}};
 
       cgh.parallel_for<class BlackScholesKernel<sg_size>>(ndrange,
-          [dm_cpflag, dm_S0, dm_K, dm_r, dm_sigma, dm_T, dm_answer, size_ = size, num_iters = num_iters](s::id<1> gid) [[intel::reqd_sub_group_size(sg_size)]] {
-            uint tid = gid[0];
+          [dm_cpflag, dm_S0, dm_K, dm_r, dm_sigma, dm_T, dm_answer, size_ = size, num_iters = num_iters](s::nd_item<1> gid) [[intel::reqd_sub_group_size(sg_size)]] {
+            uint tid = gid.get_global_id(0);
             if(tid >= size_)
               return;
 

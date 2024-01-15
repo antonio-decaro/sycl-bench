@@ -43,14 +43,17 @@ public:
   }
 
   void run(std::vector<sycl::event>& events) {
+    const size_t global_size = args.problem_size;
+    const size_t local_size = args.local_size;
     events.push_back(args.device_queue.submit([&](sycl::handler& cgh) {
       auto in1 = input1_buf.template get_access<s::access::mode::read>(cgh);
       auto in2 = input2_buf.template get_access<s::access::mode::read>(cgh);
       // Use discard_write here, otherwise the content of the host buffer must first be copied to device
       auto out = output_buf.template get_access<s::access::mode::discard_write>(cgh);
-      sycl::range<1> ndrange{args.problem_size};
+      sycl::nd_range<1> ndrange{{args.problem_size}, {args.local_size}};
 
-      cgh.parallel_for<class VecAddKernel<T, sg_size>>(ndrange, [=, iters=args.num_iters](sycl::id<1> gid) [[intel::reqd_sub_group_size(sg_size)]] {
+      cgh.parallel_for<class VecAddKernel<T, sg_size>>(ndrange, [=, iters=args.num_iters](sycl::nd_item<1> item) [[intel::reqd_sub_group_size(sg_size)]] {
+        const auto gid = item.get_global_id(0);
         for (int _ = 0; _ < iters; _++)
           out[gid] = in1[gid] + in2[gid]; 
       });
