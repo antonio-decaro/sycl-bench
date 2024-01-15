@@ -45,14 +45,14 @@ public:
     events.push_back(args.device_queue.submit([&](sycl::handler& cgh) {
       auto in = input_buf.get_access<s::access::mode::read>(cgh);
       auto out = output_buf.get_access<s::access::mode::discard_write>(cgh);
-      sycl::nd_range<2> ndrange{{size, size}, {local_size, local_size}};
+      sycl::nd_range<2> ndrange{{size, size}, {local_size, 1}};
 
       // Sobel kernel 3x3
       const float kernel[] = {1, 0, -1, 2, 0, -2, 1, 0, -1};
 
-      cgh.parallel_for<class SobelBenchKernel<sg_size>>(ndrange, [in, out, kernel, size_ = size](sycl::id<2> gid) [[intel::reqd_sub_group_size(sg_size)]] {
-        int x = gid[0];
-        int y = gid[1];
+      cgh.parallel_for<class SobelBenchKernel<sg_size>>(ndrange, [in, out, kernel, size_ = size](sycl::nd_item<2> item) [[intel::reqd_sub_group_size(sg_size)]] {
+        int x = item.get_global_id(0);
+        int y = item.get_global_id(1);
         sycl::float4 Gx = sycl::float4(0, 0, 0, 0);
         sycl::float4 Gy = sycl::float4(0, 0, 0, 0);
         const int radius = 3;
