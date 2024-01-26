@@ -133,6 +133,7 @@ set(benchmarks
   single-kernel/spgemm.cpp
   single-kernel/spmv.cpp
   single-kernel/black_scholes.cpp
+  single-kernel/bfs.cpp
 )
 
 # Setting variables
